@@ -45,7 +45,7 @@ main{max-width:760px;margin:0 auto;padding:16px 14px}
 .hero:after{content:"";position:absolute;right:-40px;top:-40px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.08)}
 .hero .eyebrow{font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.85;font-weight:600}
 .hero h1{font-family:'Saira Condensed';font-weight:700;font-size:30px;line-height:1.02;margin:7px 0 3px}
-.hero .sub{font-size:13px;opacity:.9;line-height:1.4;max-width:88%}
+.hero .sub{font-size:13.5px;opacity:1;font-weight:600;line-height:1.45;max-width:92%}
 .hero .kpis{display:flex;gap:18px;margin-top:16px;position:relative;z-index:2}
 .hero .kpi .n{font-family:'Saira Condensed';font-weight:700;font-size:26px;line-height:1}
 .hero .kpi .l{font-size:10.5px;opacity:.85;letter-spacing:.4px;margin-top:2px}
@@ -301,7 +301,7 @@ function getCapYear(iso){var d=iso?parseISO(iso):new Date();if(!d)d=new Date();v
 var CFG={
   commRate:3, redOnePct:30, capLimit:6000, ment1Pct:20, ment2Pct:10,
   inMentoring:true, annualGoal:100000, profitPIN:"2020",
-  resale:{earnest:3,loanApp:7,appraisal:21,inspection:7,remedy:3,loanCommit:30,titleBefore:15,finalBefore:2},
+  resale:{earnest:3,loanApp:7,appraisal:21,inspection:7,remedy:3,loanCommit:30,titleBefore:15,finalBefore:2,homeInsp:3},
   newbuild:{deposit:5,loanApp:7,selections:21,lockBefore:30,apprBefore:30,orientBefore:7,coBefore:3}
 };
 
@@ -312,17 +312,21 @@ var EXP_CATS=["MLS & Board Fees","Marketing & Ads","Signs & Lockboxes","Office &
 
 /* seed: Vera's four real clients (resale) */
 function seedDeals(){
-  return [
+  var a=[
     mk("Lucy Akwawa","2238 Perkins Court, Columbus, OH 43229","resale",135000,3,1000,3000,"2026-07-01","2026-07-31",{loanCommit:30,finalBefore:2},"Conventional loan. Seller credit $3,000 toward closing costs."),
     mk("Jadesola Lawal","2518 Tree Knoll Ct, Columbus, OH 43219","resale",299900,3,1000,0,"2026-06-04","",{loanCommit:25,finalBefore:2},"Conventional. Closing date not on contract \u2014 set it to complete the timeline."),
     mk("Vivian Osuofia","1746 Pine Tree St S, Columbus, OH 43229","resale",130000,3,1000,2600,"2026-08-07","2026-09-07",{loanCommit:25,finalBefore:3},"Conventional. Seller credit $2,600 toward closing costs."),
     mk("Agathas Agu","2818 Avati Dr H-4, Columbus, OH 43207","resale",126500,3,1000,2530,"2026-07-30","2026-08-31",{loanCommit:25,finalBefore:3},"Conventional. Seller credit $2,530 toward closing costs.")
   ];
+  a[1].attorneyDays=3;
+  a[2].condoDocs=true;
+  a[3].condoDocs=true;
+  return a;
 }
 function mk(client,addr,type,price,rate,earnest,credit,accept,close,tl,notes){
   return {id:"d"+Math.random().toString(36).slice(2,9),client:client,phone:"",email:"",address:addr,type:type,builder:"",
     price:price,commRate:rate,earnest:earnest,sellerCredit:credit,acceptanceDate:accept,closingDate:close,
-    tl:tl||{},overrides:{},photos:[],notes:notes||"",gross:0,redOne:0,mentoring:0,vera:0};
+    tl:tl||{},overrides:{},photos:[],notes:notes||"",earnestTiming:"remedy",condoDocs:false,attorneyDays:0,custom:[],gross:0,redOne:0,mentoring:0,vera:0};
 }
 
 /* ============ persistence ============ */
@@ -344,6 +348,8 @@ function tlVal(d,section,key){var s=d.tl&&d.tl[key]!=null?d.tl[key]:CFG[section]
 function buildTimeline(d){
   var m=[];
   if(d.type==="newbuild") m=buildNewBuild(d); else m=buildResale(d);
+  var cu=d.custom||[];
+  for(var ci=0;ci<cu.length;ci++){m.push({key:"cust"+ci,label:cu[ci].label,date:cu[ci].date||"",sub:"Custom milestone",custom:true});}
   /* apply per-milestone manual overrides */
   for(var i=0;i<m.length;i++){if(d.overrides&&d.overrides[m[i].key])m[i].date=d.overrides[m[i].key];}
   /* sort by date, undated last */
@@ -354,19 +360,31 @@ function buildResale(d){
   var a=d.acceptanceDate,c=d.closingDate;
   var R=CFG.resale;
   function g(k){return d.tl&&d.tl[k]!=null?d.tl[k]:R[k];}
-  return [
+  var earnestDate="";
+  if(a){
+    if(d.earnestTiming==="accept")earnestDate=addDays(a,g("earnest"));
+    else earnestDate=addDays(a,g("inspection")+g("remedy")+g("earnest"));
+  }
+  var m=[
     {key:"accept",label:"Mutual Acceptance",date:a,sub:"Contract effective date"},
-    {key:"earnest",label:"Earnest Money Due",date:a?addDays(a,g("earnest")):"",sub:d.earnest?fmt(d.earnest)+" to title company":"",money:true},
+    {key:"homeinsp",label:"Home Inspection",date:a?addDays(a,g("homeInsp")):"",sub:(d.overrides&&d.overrides.homeinsp)?"Booked \u2014 attend the wrap-up if you can":"Suggested \u2014 tap edit when booked",appt:true},
+    {key:"inspend",label:"Inspection Deadline (last day)",date:a?addDays(a,g("inspection")):"",sub:"Final day to deliver requests to remedy"},
     {key:"loanapp",label:"Loan Application",date:a?addDays(a,g("loanApp")):"",sub:"Formal application + identify lender"},
-    {key:"appraisal",label:"Appraisal (target)",date:a?addDays(a,g("appraisal")):"",sub:"Ordered by lender"},
-    {key:"inspend",label:"Inspection Period Ends",date:a?addDays(a,g("inspection")):"",sub:"Requests to remedy due"},
-    {key:"remedyend",label:"Remedy Period Ends",date:a?addDays(a,g("inspection")+g("remedy")):"",sub:"Written agreement deadline"},
+    {key:"remedyend",label:"Remedy Deadline (last day)",date:a?addDays(a,g("inspection")+g("remedy")):"",sub:"Written agreement on repairs due"},
+    {key:"earnest",label:"Earnest Money Due",date:earnestDate,sub:(d.earnest?fmt(d.earnest)+" to title company":"")+(d.earnestTiming==="accept"?" \u00b7 3 days after acceptance":" \u00b7 after remedy period"),money:true},
+    {key:"appraisal",label:"Appraisal (target)",date:a?addDays(a,g("appraisal")):"",sub:"Estimate \u2014 lender schedules the real one"},
     {key:"commit",label:"Loan Commitment",date:a?addDays(a,g("loanCommit")):"",sub:"Lender commitment delivered"},
     {key:"title",label:"Title Commitment Due",date:c?addDays(c,-g("titleBefore")):"",sub:"From seller, before closing"},
     {key:"finalwalk",label:"Final Walk-Through",date:c?addDays(c,-g("finalBefore")):"",sub:"Verify condition"},
     {key:"closing",label:"Closing",date:c,sub:"Sign, fund, keys",big:true},
     {key:"possession",label:"Possession",date:c,sub:"At closing"}
   ];
+  if(d.attorneyDays>0)m.push({key:"attorney",label:"Attorney Approval Ends",date:a?addDays(a,Number(d.attorneyDays)):"",sub:"Either attorney may disapprove until this date"});
+  if(d.condoDocs){
+    m.push({key:"condodocs",label:"HOA/Condo Docs Due",date:a?addDays(a,5):"",sub:"Seller delivers association documents"});
+    m.push({key:"condoreview",label:"HOA Docs Review Ends",date:a?addDays(a,10):"",sub:"Last day to object (or 5 days after receipt)"});
+  }
+  return m;
 }
 function buildNewBuild(d){
   var a=d.acceptanceDate,c=d.closingDate;
@@ -536,7 +554,9 @@ function renderTimeline(){
     if(mi.flag)h+='<div class="sub2" style="color:var(--amber)">&#9888; '+esc(mi.flag)+'</div>';
     h+='</div>';
   }
-  h+='</div></div>';
+  h+='</div>';
+  h+='<div class="rowbtns" style="margin-top:2px"><button class="sbtn" style="flex:1" onclick="addCustomMile(\''+d.id+'\')">&#10133; Add milestone (custom clause)</button></div>';
+  h+='</div>';
 
   /* photos */
   h+='<div class="box"><div class="h">Final Home Photos</div><div class="sub">Add pictures to share with '+esc(firstName(d.client))+' at closing.</div>';
@@ -566,13 +586,42 @@ function firstName(s){return String(s||"").split(" ")[0];}
 function editMile(id,key,label){
   var d=findDeal(id);if(!d)return;
   var cur="";var m=buildTimeline(d);for(var i=0;i<m.length;i++){if(m[i].key===key)cur=m[i].date;}
-  var v=window.prompt("Set date for \""+label+"\" (YYYY-MM-DD).\nLeave blank to reset to the auto-calculated date.",cur||"");
+  var isCustom=key.indexOf("cust")===0;
+  var msg=isCustom?("Edit date for \""+label+"\" (YYYY-MM-DD).\nLeave blank to REMOVE this custom milestone."):("Set date for \""+label+"\" (YYYY-MM-DD).\nLeave blank to reset to the auto-calculated date.");
+  var v=window.prompt(msg,cur||"");
   if(v===null)return;
-  if(!d.overrides)d.overrides={};
   v=v.trim();
-  if(v===""){delete d.overrides[key];}
-  else{if(!parseISO(v)){toast("Use format YYYY-MM-DD");return;}d.overrides[key]=v;}
-  save();renderTimeline();toast("Date updated");
+  if(v!==""&&!parseISO(v)){toast("Use format YYYY-MM-DD");return;}
+  if(isCustom){
+    var idx=parseInt(key.slice(4),10);
+    if(!d.custom)d.custom=[];
+    if(v===""){d.custom.splice(idx,1);toast("Milestone removed");}
+    else{if(d.custom[idx])d.custom[idx].date=v;toast("Date updated");}
+  } else if(key==="closing"||key==="possession"){
+    d.closingDate=v;
+    if(d.overrides){delete d.overrides.closing;delete d.overrides.possession;}
+    toast(v===""?"Closing date cleared":"Closing set \u2014 all views recalculated");
+  } else if(key==="accept"||key==="contract"){
+    d.acceptanceDate=v;
+    if(d.overrides)delete d.overrides[key];
+    toast("Acceptance updated \u2014 all views recalculated");
+  } else {
+    if(!d.overrides)d.overrides={};
+    if(v===""){delete d.overrides[key];}else{d.overrides[key]=v;}
+    toast("Date updated");
+  }
+  recalcAll();save();renderTimeline();
+}
+function addCustomMile(id){
+  var d=findDeal(id);if(!d)return;
+  var label=window.prompt("Name this milestone (e.g. Septic inspection, Appraisal received)","");
+  if(label===null)return;label=label.trim();if(!label){toast("Give it a name");return;}
+  var v=window.prompt("Date for "+label+" (YYYY-MM-DD)","");
+  if(v===null)return;v=v.trim();
+  if(v!==""&&!parseISO(v)){toast("Use format YYYY-MM-DD");return;}
+  if(!d.custom)d.custom=[];
+  d.custom.push({label:label,date:v});
+  save();renderTimeline();toast("Milestone added");
 }
 
 /* ============ photos ============ */
@@ -907,6 +956,16 @@ function renderForm(){
   h+='<div class="hint">Profit &amp; commission calculate automatically from the sale price.</div>';
   h+='<div class="g2" style="margin-top:8px"><div class="field"><label class="lbl">Earnest money</label><input class="inp" id="f-earnest" type="number" inputmode="decimal" placeholder="1000"/></div>';
   h+='<div class="field"><label class="lbl">Seller credit</label><input class="inp" id="f-credit" type="number" inputmode="decimal" placeholder="0"/></div></div>';
+  h+='<div class="field" id="f-et-wrap"><label class="lbl">Earnest due (&para;12.2 initials)</label><div class="seg">';
+  h+='<button class="sbtn on" id="f-et-remedy" onclick="setET(\'remedy\')">After remedy period</button>';
+  h+='<button class="sbtn" id="f-et-accept" onclick="setET(\'accept\')">3d after acceptance</button></div>';
+  h+='<input type="hidden" id="f-et" value="remedy"/>';
+  h+='<div class="hint">Check which option the buyer initialed in &para;12.2. All four current contracts use \u201cafter remedy period.\u201d</div></div>';
+  h+='<div class="g2"><div class="field"><label class="lbl">Attorney approval (days)</label><input class="inp" id="f-attorney" type="number" inputmode="numeric" placeholder="blank = none"/></div>';
+  h+='<div class="field"><label class="lbl">Condo / HOA docs (&para;6.5)</label><div class="seg">';
+  h+='<button class="sbtn" id="f-condo-yes" onclick="setCondo(true)">Yes</button>';
+  h+='<button class="sbtn on" id="f-condo-no" onclick="setCondo(false)">No</button></div>';
+  h+='<input type="hidden" id="f-condo" value="false"/></div></div>';
   h+='<div class="g2"><div class="field"><label class="lbl" id="lbl-accept">Acceptance date</label><input class="inp" id="f-accept" type="date"/></div>';
   h+='<div class="field"><label class="lbl" id="lbl-close">Closing date</label><input class="inp" id="f-close" type="date"/></div></div>';
   h+='<div class="g2"><div class="field"><label class="lbl">Client phone (WhatsApp)</label><input class="inp" id="f-phone" type="tel" placeholder="+1614\u2026"/></div>';
@@ -954,11 +1013,22 @@ function advRow(label,id,val){
   return '<div class="drow" style="padding:8px 0"><div class="dl"><div class="ds" style="font-size:13px;color:var(--ink)">'+label+'</div></div>'
     +'<input class="inp" id="'+id+'" type="number" inputmode="numeric" value="'+val+'" style="width:78px;text-align:center;padding:8px"/></div>';
 }
+function setET(v){
+  $("f-et").value=v;
+  $("f-et-remedy").classList.toggle("on",v==="remedy");
+  $("f-et-accept").classList.toggle("on",v==="accept");
+}
+function setCondo(v){
+  $("f-condo").value=v?"true":"false";
+  $("f-condo-yes").classList.toggle("on",v);
+  $("f-condo-no").classList.toggle("on",!v);
+}
 function setType(t){
   $("f-type").value=t;
   $("f-type-resale").classList.toggle("on",t==="resale");
   $("f-type-newbuild").classList.toggle("on",t==="newbuild");
   $("f-builder-wrap").style.display=(t==="newbuild")?"block":"none";
+  var etw=$("f-et-wrap");if(etw)etw.style.display=(t==="newbuild")?"none":"block";
   $("lbl-accept").textContent=(t==="newbuild")?"Contract date":"Acceptance date";
   $("lbl-close").textContent=(t==="newbuild")?"Est. closing date":"Closing date";
   renderAdv();
@@ -972,6 +1042,9 @@ function loadForm(id){
   $("f-earnest").value=d.earnest;$("f-credit").value=d.sellerCredit||"";
   $("f-accept").value=d.acceptanceDate||"";$("f-close").value=d.closingDate||"";
   $("f-phone").value=d.phone||"";$("f-email").value=d.email||"";$("f-notes").value=d.notes||"";
+  setET(d.earnestTiming==="accept"?"accept":"remedy");
+  setCondo(!!d.condoDocs);
+  $("f-attorney").value=d.attorneyDays>0?d.attorneyDays:"";
   var del=$("f-delete");if(del){del.style.display="block";}
   /* prefill per-deal tl if present */
   if(d.tl){for(var k in d.tl){if(d.tl.hasOwnProperty(k)){var el=$("adv-"+k);if(el)el.value=d.tl[k];}}}
@@ -995,6 +1068,9 @@ function saveDeal(){
   d.acceptanceDate=$("f-accept").value||"";d.closingDate=$("f-close").value||"";
   d.phone=($("f-phone").value||"").trim();d.email=($("f-email").value||"").trim();d.notes=($("f-notes").value||"").trim();
   d.tl=tl;
+  d.earnestTiming=$("f-et").value==="accept"?"accept":"remedy";
+  d.condoDocs=$("f-condo").value==="true";
+  d.attorneyDays=parseInt($("f-attorney").value,10)||0;
   recalcAll();save();
   STATE.dealId=d.id;
   toast("Saved \u2014 "+firstName(client)+" \uD83C\uDF89");
